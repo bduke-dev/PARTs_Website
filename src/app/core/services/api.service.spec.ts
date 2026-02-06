@@ -426,4 +426,184 @@ describe('APIService', () => {
       expect(result.status).toBe(500);
     });
   });
+
+  describe('Edge cases and additional scenarios', () => {
+    it('should handle get request with empty params object', async () => {
+      service.get(false, 'test/endpoint', {});
+      const req = httpMock.expectOne('test/endpoint');
+      expect(req.request.params.keys().length).toBe(0);
+      req.flush({});
+    });
+
+    it('should handle post request with null body', async () => {
+      service.post(false, 'test/endpoint', null);
+      const req = httpMock.expectOne('test/endpoint');
+      expect(req.request.body).toBeNull();
+      req.flush({});
+    });
+
+    it('should handle put request with empty object', async () => {
+      service.put(false, 'test/endpoint', {});
+      const req = httpMock.expectOne('test/endpoint');
+      expect(req.request.body).toEqual({});
+      req.flush({});
+    });
+
+    it('should handle delete request without params', async () => {
+      service.delete(false, 'test/endpoint');
+      const req = httpMock.expectOne('test/endpoint');
+      expect(req.request.method).toBe('DELETE');
+      req.flush({});
+    });
+
+    it('should handle multiple concurrent GET requests', async () => {
+      const promise1 = service.get(false, 'test/endpoint1');
+      const promise2 = service.get(false, 'test/endpoint2');
+      const promise3 = service.get(false, 'test/endpoint3');
+
+      const req1 = httpMock.expectOne('test/endpoint1');
+      const req2 = httpMock.expectOne('test/endpoint2');
+      const req3 = httpMock.expectOne('test/endpoint3');
+
+      req1.flush({ data: '1' });
+      req2.flush({ data: '2' });
+      req3.flush({ data: '3' });
+
+      const [result1, result2, result3] = await Promise.all([promise1, promise2, promise3]);
+      expect(result1.data).toBe('1');
+      expect(result2.data).toBe('2');
+      expect(result3.data).toBe('3');
+    });
+
+    it('should handle request with array params', async () => {
+      const params = { ids: [1, 2, 3] };
+      service.get(false, 'test/endpoint', params);
+      const req = httpMock.expectOne(r => r.url === 'test/endpoint');
+      expect(req.request.params.getAll('ids')).toEqual(['1', '2', '3']);
+      req.flush({});
+    });
+
+    it('should handle request with boolean params', async () => {
+      const params = { active: true, deleted: false };
+      service.get(false, 'test/endpoint', params);
+      const req = httpMock.expectOne(r => r.url === 'test/endpoint');
+      expect(req.request.params.get('active')).toBe('true');
+      expect(req.request.params.get('deleted')).toBe('false');
+      req.flush({});
+    });
+
+    it('should call all callbacks in correct order on success', async () => {
+      const callOrder: string[] = [];
+      const onNext = jasmine.createSpy('onNext').and.callFake(() => callOrder.push('next'));
+      const onComplete = jasmine.createSpy('onComplete').and.callFake(() => callOrder.push('complete'));
+
+      service.get(true, 'test/endpoint', undefined, onNext, undefined, onComplete);
+      const req = httpMock.expectOne('test/endpoint');
+      req.flush({ data: 'test' });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(callOrder).toEqual(['next', 'complete']);
+    });
+
+    it('should call error callback on failure', async () => {
+      const onError = jasmine.createSpy('onError');
+
+      service.get(true, 'test/endpoint', undefined, undefined, onError);
+      const req = httpMock.expectOne('test/endpoint');
+      req.error(new ProgressEvent('error'), { status: 500 });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(onError).toHaveBeenCalled();
+    });
+
+    it('should handle API status check being called multiple times concurrently', async () => {
+      const promise1 = service.getAPIStatus();
+      const promise2 = service.getAPIStatus(); // Should return same promise
+
+      expect(promise1).toBe(promise2);
+
+      const req = httpMock.expectOne('public/api-status/');
+      req.flush({ branch: 'main' });
+
+      const [result1, result2] = await Promise.all([promise1, promise2]);
+      expect(result1).toBe('main');
+      expect(result2).toBe('main');
+    });
+
+    it('should handle getAPIStatus when response has no branch', async () => {
+      const promise = service.getAPIStatus();
+      const req = httpMock.expectOne('public/api-status/');
+      req.flush({ status: 'ok' }); // No branch property
+
+      const result = await promise;
+      expect(result).toBe('');
+    });
+
+    it('should handle getAPIStatus with string response', async () => {
+      const promise = service.getAPIStatus();
+      const req = httpMock.expectOne('public/api-status/');
+      req.flush('ok'); // String response instead of object
+
+      const result = await promise;
+      expect(result).toBe('');
+    });
+
+    it('should reset outstanding API status check on error', async () => {
+      const promise1 = service.getAPIStatus();
+      const req1 = httpMock.expectOne('public/api-status/');
+      req1.error(new ProgressEvent('error'), { status: 500 });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Should be able to call again after error
+      const promise2 = service.getAPIStatus();
+      const req2 = httpMock.expectOne('public/api-status/');
+      req2.flush({ branch: 'dev' });
+
+      const result = await promise2;
+      expect(result).toBe('dev');
+    });
+
+    it('should handle post with complex nested object', async () => {
+      const complexData = {
+        user: {
+          name: 'Test',
+          settings: {
+            notifications: true,
+            theme: 'dark'
+          }
+        },
+        items: [1, 2, 3]
+      };
+
+      service.post(false, 'test/endpoint', complexData);
+      const req = httpMock.expectOne('test/endpoint');
+      expect(req.request.body).toEqual(complexData);
+      req.flush({ success: true });
+    });
+
+    it('should handle put with array data', async () => {
+      const arrayData = [{ id: 1 }, { id: 2 }, { id: 3 }];
+      service.put(false, 'test/endpoint', arrayData);
+      const req = httpMock.expectOne('test/endpoint');
+      expect(req.request.body).toEqual(arrayData);
+      req.flush({ success: true });
+    });
+
+    it('should not add duplicate offline banner', async () => {
+      siteBannersSubject.next([
+        new SiteBanner('0', 'Application is running in offline mode.')
+      ]);
+
+      // Trigger offline status
+      service.getAPIStatus();
+      const req = httpMock.expectOne('public/api-status/');
+      req.error(new ProgressEvent('error'), { status: 0 });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      // Should not call addSiteBanner since banner already exists
+      expect(generalServiceSpy.addSiteBanner).not.toHaveBeenCalled();
+    });
+  });
 });
