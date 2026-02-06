@@ -2,6 +2,9 @@ import {
   strNoE,
   cloneObject,
   formatDateString,
+  formatTimeString,
+  returnIfValidDate,
+  getDateDuration,
   propertyMap,
   arrayObjectIndexOf,
   updateObjectInArray,
@@ -979,6 +982,179 @@ describe('Utils Functions', () => {
       expect(callArgs.behavior).toBe('smooth');
       
       document.body.removeChild(mockElement);
+    });
+  });
+
+  describe('formatTimeString', () => {
+    it('should format date to time string', () => {
+      const date = new Date('2024-03-15T14:30:00');
+      const result = formatTimeString(date);
+      
+      expect(result).toMatch(/\d{1,2}:\d{2} (AM|PM)/);
+      expect(result).toContain('2:30 PM');
+    });
+
+    it('should format string date to time string', () => {
+      const result = formatTimeString('2024-03-15T09:45:00');
+      
+      expect(result).toMatch(/\d{1,2}:\d{2} (AM|PM)/);
+      expect(result).toContain('9:45 AM');
+    });
+
+    it('should handle midnight', () => {
+      const date = new Date('2024-03-15T00:00:00');
+      const result = formatTimeString(date);
+      
+      expect(result).toContain('12:00 AM');
+    });
+
+    it('should handle noon', () => {
+      const date = new Date('2024-03-15T12:00:00');
+      const result = formatTimeString(date);
+      
+      expect(result).toContain('12:00 PM');
+    });
+
+    it('should pad minutes with zero when less than 10', () => {
+      const date = new Date('2024-03-15T15:05:00');
+      const result = formatTimeString(date);
+      
+      expect(result).toContain('3:05 PM');
+    });
+  });
+
+  describe('returnIfValidDate', () => {
+    it('should return Date for valid MM/DD/YYYY HH:MM AM format', () => {
+      const result = returnIfValidDate('3/15/2024 2:30 PM');
+      
+      expect(result).toBeInstanceOf(Date);
+      expect(result).not.toBeNull();
+    });
+
+    it('should return Date for valid ISO 8601 format', () => {
+      const result = returnIfValidDate('2024-03-15T14:30:00Z');
+      
+      expect(result).toBeInstanceOf(Date);
+      expect(result).not.toBeNull();
+    });
+
+    it('should return Date for valid ISO 8601 format with milliseconds', () => {
+      const result = returnIfValidDate('2024-03-15T14:30:00.123Z');
+      
+      expect(result).toBeInstanceOf(Date);
+      expect(result).not.toBeNull();
+    });
+
+    it('should return Date when input is already a Date', () => {
+      const inputDate = new Date('2024-03-15T14:30:00');
+      const result = returnIfValidDate(inputDate);
+      
+      expect(result).toBe(inputDate);
+    });
+
+    it('should return null for invalid date string', () => {
+      const result = returnIfValidDate('invalid date');
+      
+      expect(result).toBeNull();
+    });
+
+    it('should return null for empty string', () => {
+      const result = returnIfValidDate('');
+      
+      expect(result).toBeNull();
+    });
+
+    it('should return null for non-date values', () => {
+      expect(returnIfValidDate('hello world')).toBeNull();
+      expect(returnIfValidDate('12345')).toBeNull();
+    });
+
+    it('should handle single digit month and day', () => {
+      const result = returnIfValidDate('1/5/2024 9:30 AM');
+      
+      expect(result).toBeInstanceOf(Date);
+      expect(result).not.toBeNull();
+    });
+
+    it('should handle month and day with 1 prefix pattern', () => {
+      const result = returnIfValidDate('11/15/2024 11:30 PM');
+      
+      expect(result).toBeInstanceOf(Date);
+      expect(result).not.toBeNull();
+    });
+  });
+
+  describe('getDateDuration', () => {
+    it('should return duration in hours and minutes', () => {
+      const start = new Date('2024-03-15T14:00:00');
+      const end = new Date('2024-03-15T16:30:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('2h 30m');
+    });
+
+    it('should return only minutes when less than an hour', () => {
+      const start = new Date('2024-03-15T14:00:00');
+      const end = new Date('2024-03-15T14:45:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('45m');
+    });
+
+    it('should handle zero minutes', () => {
+      const start = new Date('2024-03-15T14:00:00');
+      const end = new Date('2024-03-15T16:00:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('2h 0m');
+    });
+
+    it('should handle 1 minute duration', () => {
+      const start = new Date('2024-03-15T14:00:00');
+      const end = new Date('2024-03-15T14:01:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('1m');
+    });
+
+    it('should handle multiple hours', () => {
+      const start = new Date('2024-03-15T09:00:00');
+      const end = new Date('2024-03-15T17:15:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('8h 15m');
+    });
+
+    it('should handle exactly 1 hour', () => {
+      const start = new Date('2024-03-15T14:00:00');
+      const end = new Date('2024-03-15T15:00:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('1h 0m');
+    });
+
+    it('should handle long durations', () => {
+      const start = new Date('2024-03-15T08:00:00');
+      const end = new Date('2024-03-16T10:30:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('26h 30m');
+    });
+
+    it('should return 0m for same start and end time', () => {
+      const start = new Date('2024-03-15T14:00:00');
+      const end = new Date('2024-03-15T14:00:00');
+      
+      const result = getDateDuration(start, end);
+      
+      expect(result).toBe('0m');
     });
   });
 });
