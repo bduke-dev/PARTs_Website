@@ -349,4 +349,207 @@ describe('ModalService', () => {
       expect(service.getModalVisibleCount()).toBe(2);
     });
   });
+
+  describe('Additional edge cases', () => {
+    it('should handle triggerFormValidationBanner with empty array', () => {
+      
+      service.triggerFormValidationBanner([]);
+      
+      expect(mockGeneralService.addBanner).toHaveBeenCalled();
+    });
+
+    it('should handle triggerFormValidationBanner with single invalid field', () => {
+      
+      service.triggerFormValidationBanner(['Email']);
+      
+      expect(mockGeneralService.addBanner).toHaveBeenCalledWith(jasmine.objectContaining({
+        message: jasmine.stringContaining('Email is invalid')
+      }));
+    });
+
+    it('should handle triggerFormValidationBanner with multiple invalid fields', () => {
+      
+      service.triggerFormValidationBanner(['Email', 'Phone', 'Name']);
+      
+      const call = (mockGeneralService.addBanner as jasmine.Spy).calls.mostRecent();
+      const banner = call.args[0];
+      expect(banner.message).toContain('Email is invalid');
+      expect(banner.message).toContain('Phone is invalid');
+      expect(banner.message).toContain('Name is invalid');
+    });
+
+    it('should handle checkResponse with valid response (no error)', () => {
+      const response = { data: 'test', success: true };
+      
+      const result = service.checkResponse(response);
+      
+      expect(result).toBe(true);
+    });
+
+    it('should handle checkResponse with error but no errorMessage', () => {
+      const response = { retMessage: 'Error occurred', error: true };
+      
+      const result = service.checkResponse(response);
+      
+      expect(result).toBe(false);
+      expect(mockGeneralService.addBanner).toHaveBeenCalledWith(jasmine.objectContaining({
+        message: 'Error occurred'
+      }));
+    });
+
+    it('should handle checkResponse with error and errorMessage', () => {
+      const errorObj = { field: 'email', issue: 'invalid format' };
+      const response = { 
+        retMessage: 'Validation failed', 
+        error: true,
+        errorMessage: JSON.stringify(errorObj)
+      };
+      
+      const result = service.checkResponse(response);
+      
+      expect(result).toBe(false);
+      expect(mockGeneralService.addBanner).toHaveBeenCalled();
+    });
+
+    it('should handle successfulResponseBanner with valid message', () => {
+      const response = { retMessage: 'Success!' };
+      
+      service.successfulResponseBanner(response);
+      
+      expect(mockGeneralService.addBanner).toHaveBeenCalledWith(jasmine.objectContaining({
+        message: 'Success!',
+        time: 3500
+      }));
+    });
+
+    it('should handle successfulResponseBanner with empty message', () => {
+      const response = { retMessage: '' };
+      
+      service.successfulResponseBanner(response);
+      
+      expect(mockGeneralService.addBanner).not.toHaveBeenCalled();
+    });
+
+    it('should handle successfulResponseBanner with null message', () => {
+      const response = { retMessage: null };
+      
+      service.successfulResponseBanner(response);
+      
+      expect(mockGeneralService.addBanner).not.toHaveBeenCalled();
+    });
+
+    it('should handle successfulResponseBanner with undefined message', () => {
+      const response = {};
+      
+      service.successfulResponseBanner(response);
+      
+      expect(mockGeneralService.addBanner).not.toHaveBeenCalled();
+    });
+
+    it('should handle handleHTTPError with object error', () => {
+      spyOn(service, 'triggerError');
+      const error = {
+        error: {
+          email: 'Email is invalid',
+          phone: 'Phone is required'
+        },
+        status: 400
+      };
+      
+      service.handleHTTPError(error);
+      
+      expect(service.triggerError).toHaveBeenCalled();
+      const errorText = (service.triggerError as jasmine.Spy).calls.mostRecent().args[0];
+      expect(errorText).toContain('Email is invalid');
+      expect(errorText).toContain('Phone is required');
+    });
+
+    it('should handle handleHTTPError with string error', () => {
+      spyOn(service, 'triggerError');
+      const error = {
+        error: 'Not found',
+        status: 404,
+        statusText: 'Not Found'
+      };
+      
+      service.handleHTTPError(error);
+      
+      expect(service.triggerError).toHaveBeenCalledWith('Not Found');
+    });
+
+    it('should handle handleHTTPError with decrementCallsFn', () => {
+      const decrementFn = jasmine.createSpy('decrementFn');
+      const error = {
+        error: 'Error',
+        status: 500,
+        statusText: 'Server Error'
+      };
+      
+      service.handleHTTPError(error, decrementFn);
+      
+      expect(decrementFn).toHaveBeenCalled();
+    });
+
+    it('should handle handleHTTPError without decrementCallsFn', () => {
+      const error = {
+        error: 'Error',
+        status: 500,
+        statusText: 'Server Error'
+      };
+      
+      expect(() => service.handleHTTPError(error)).not.toThrow();
+    });
+
+    it('should handle confirmFx being null in acceptConfirm', () => {
+      // Set up confirm without a callback
+      service.showConfirmModal = true;
+      
+      // Just verify it doesn't throw when there's no callback
+      expect(() => service.acceptConfirm()).not.toThrow();
+    });
+
+    it('should handle rejectConfirmFx being null in rejectConfirm', () => {
+      // Set up confirm without a reject callback
+      service.showConfirmModal = true;
+      
+      // Just verify it doesn't throw when there's no reject callback
+      expect(() => service.rejectConfirm()).not.toThrow();
+    });
+
+    it('should properly close error modal on acceptError', () => {
+      service.showErrorModal = true;
+      service.errorMessage = 'Test error';
+      
+      service.acceptError();
+      
+      expect(service.showErrorModal).toBe(false);
+      expect(service.errorMessage).toBe('');
+      expect(service.errorButtonText).toBe('OK');
+    });
+
+    it('should properly set up and accept confirmation', () => {
+      const confirmFn = jasmine.createSpy('confirmFn');
+      
+      service.triggerConfirm('Are you sure?', confirmFn);
+      expect(service.showConfirmModal).toBe(true);
+      expect(service.confirmMessage).toBe('Are you sure?');
+      
+      service.acceptConfirm();
+      expect(confirmFn).toHaveBeenCalled();
+      expect(service.showConfirmModal).toBe(false);
+    });
+
+    it('should properly set up and reject confirmation', () => {
+      const confirmFn = jasmine.createSpy('confirmFn');
+      const rejectFn = jasmine.createSpy('rejectFn');
+      
+      service.triggerConfirm('Are you sure?', confirmFn, rejectFn);
+      expect(service.showConfirmModal).toBe(true);
+      
+      service.rejectConfirm();
+      expect(rejectFn).toHaveBeenCalled();
+      expect(confirmFn).not.toHaveBeenCalled();
+      expect(service.showConfirmModal).toBe(false);
+    });
+  });
 });
