@@ -360,6 +360,48 @@ describe('NotificationsService', () => {
 
       expect(service['notifications_'].length).toBe(initialCount);
     });
+
+    it('should add new messages', () => {
+      const alerts: Alert[] = [{
+        id: 1,
+        channel_send_id: 456,
+        body: 'Test message',
+        subject: 'Test',
+        url: '',
+        staged_time: new Date()
+      }];
+
+      mockAPIService.get.and.callFake((loading: boolean, endpoint: string, params: any, onNext: any) => {
+        onNext(alerts);
+      });
+
+      spyOn(service, 'pushMessage');
+      service.getUserAlerts(true, 'message');
+
+      expect(service.pushMessage).toHaveBeenCalled();
+    });
+
+    it('should not add duplicate messages', () => {
+      const alert: Alert = {
+        id: 1,
+        channel_send_id: 456,
+        body: 'Test',
+        subject: 'Test',
+        url: '',
+        staged_time: new Date()
+      };
+
+      service.pushMessage(alert);
+
+      mockAPIService.get.and.callFake((loading: boolean, endpoint: string, params: any, onNext: any) => {
+        onNext([alert]);
+      });
+
+      const initialCount = service['messages_'].length;
+      service.getUserAlerts(true, 'message');
+
+      expect(service['messages_'].length).toBe(initialCount);
+    });
   });
 
   describe('dismissAlert', () => {
@@ -443,6 +485,34 @@ describe('NotificationsService', () => {
       service.dismissAlert(alert);
 
       expect(mockModalService.triggerError).toHaveBeenCalledWith('Error');
+    });
+
+    it('should remove from messages list when alert exists in messages', () => {
+      const alert: Alert = {
+        id: 1,
+        channel_send_id: 789,
+        body: 'Test',
+        subject: 'Test',
+        url: '',
+        staged_time: new Date()
+      };
+
+      service.pushMessage(alert);
+
+      let callCount = 0;
+      mockAPIService.get.and.callFake((loading: boolean, endpoint: string, params: any, onNext: any) => {
+        if (callCount === 0) {
+          callCount++;
+          onNext({});
+        } else {
+          onNext([]);
+        }
+      });
+
+      spyOn(service, 'removeMessage');
+      service.dismissAlert(alert);
+
+      expect(service.removeMessage).toHaveBeenCalled();
     });
   });
 

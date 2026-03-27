@@ -2,9 +2,13 @@ import {
   strNoE,
   cloneObject,
   formatDateString,
+  formatTimeString,
+  getDateDuration,
+  returnIfValidDate,
   propertyMap,
   arrayObjectIndexOf,
   updateObjectInArray,
+  updateOrAddObjectInArray,
   formatQuestionAnswer,
   decodeBoolean,
   decodeSentBoolean,
@@ -19,6 +23,7 @@ import {
   getScreenSize,
   AppSize,
   openURL,
+  openFullscreen,
   scrollTo,
   isQuestionConditionMet,
   updateTableSelectList,
@@ -32,6 +37,9 @@ import {
   triggerChange,
   devConsoleLog,
   tableToCSV,
+  isNumber,
+  resizeImageToMaxSize,
+  previewImage,
 } from './utils.functions';
 import { Question, QuestionConditionType, Response } from '../models/form.models';
 import { TableColType } from '@app/shared/components/atoms/table/table.component';
@@ -979,6 +987,398 @@ describe('Utils Functions', () => {
       expect(callArgs.behavior).toBe('smooth');
       
       document.body.removeChild(mockElement);
+    });
+  });
+
+  describe('returnIfValidDate', () => {
+    it('should return Date for MM/DD/YYYY HH:MM AM format', () => {
+      const result = returnIfValidDate('3/15/2023 10:30 AM');
+      expect(result).toBeInstanceOf(Date);
+    });
+
+    it('should return Date for MM/DD/YYYY HH:MM PM format', () => {
+      const result = returnIfValidDate('12/15/2023 11:59 PM');
+      expect(result).toBeInstanceOf(Date);
+    });
+
+    it('should return Date for ISO 8601 format with Z', () => {
+      const result = returnIfValidDate('2023-06-15T14:30:00Z');
+      expect(result).toBeInstanceOf(Date);
+    });
+
+    it('should return Date for ISO 8601 format with fractional seconds', () => {
+      const result = returnIfValidDate('2023-06-15T14:30:00.123Z');
+      expect(result).toBeInstanceOf(Date);
+    });
+
+    it('should return Date for Date instance', () => {
+      const date = new Date('2023-06-15');
+      const result = returnIfValidDate(date);
+      expect(result).toBe(date);
+    });
+
+    it('should return null for invalid date string', () => {
+      const result = returnIfValidDate('not-a-date');
+      expect(result).toBeNull();
+    });
+
+    it('should return null for empty string', () => {
+      const result = returnIfValidDate('');
+      expect(result).toBeNull();
+    });
+
+    it('should return null for null input', () => {
+      const result = returnIfValidDate(null);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('formatTimeString', () => {
+    it('should return only time portion HH:MM AM/PM', () => {
+      const result = formatTimeString(new Date('2023-06-15T14:30:00'));
+      expect(result).toMatch(/^\d{1,2}:\d{2} (AM|PM)$/);
+    });
+
+    it('should format midnight correctly', () => {
+      const result = formatTimeString(new Date('2023-06-15T00:00:00'));
+      expect(result).toContain('12:00 AM');
+    });
+
+    it('should format noon correctly', () => {
+      const result = formatTimeString(new Date('2023-06-15T12:00:00'));
+      expect(result).toContain('12:00 PM');
+    });
+  });
+
+  describe('getDateDuration', () => {
+    it('should return only minutes when duration is less than 1 hour', () => {
+      const start = new Date('2023-06-15T10:00:00');
+      const end = new Date('2023-06-15T10:45:00');
+      const result = getDateDuration(start, end);
+      expect(result).toBe('45m');
+    });
+
+    it('should return hours and minutes when duration is more than 1 hour', () => {
+      const start = new Date('2023-06-15T10:00:00');
+      const end = new Date('2023-06-15T12:30:00');
+      const result = getDateDuration(start, end);
+      expect(result).toBe('2h 30m');
+    });
+
+    it('should return only hours when minutes are zero', () => {
+      const start = new Date('2023-06-15T10:00:00');
+      const end = new Date('2023-06-15T12:00:00');
+      const result = getDateDuration(start, end);
+      expect(result).toBe('2h 0m');
+    });
+
+    it('should return 0m for zero duration', () => {
+      const start = new Date('2023-06-15T10:00:00');
+      const result = getDateDuration(start, start);
+      expect(result).toBe('0m');
+    });
+
+    it('should handle exactly 1 hour', () => {
+      const start = new Date('2023-06-15T10:00:00');
+      const end = new Date('2023-06-15T11:00:00');
+      const result = getDateDuration(start, end);
+      expect(result).toBe('1h 0m');
+    });
+  });
+
+  describe('updateOrAddObjectInArray', () => {
+    it('should update an existing object in the array', () => {
+      const arr = [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }];
+      const updated = { id: 1, name: 'Alicia' };
+      const result = updateOrAddObjectInArray(arr, 'id', updated);
+      expect(result[0].name).toBe('Alicia');
+      expect(result.length).toBe(2);
+    });
+
+    it('should add a new object if not found', () => {
+      const arr = [{ id: 1, name: 'Alice' }];
+      const newObj = { id: 2, name: 'Bob' };
+      const result = updateOrAddObjectInArray(arr, 'id', newObj);
+      expect(result.length).toBe(2);
+      expect(result[1].name).toBe('Bob');
+    });
+
+    it('should handle empty array by adding the object', () => {
+      const arr: any[] = [];
+      const obj = { id: 1, name: 'Alice' };
+      const result = updateOrAddObjectInArray(arr, 'id', obj);
+      expect(result.length).toBe(1);
+      expect(result[0].name).toBe('Alice');
+    });
+  });
+
+  describe('isNumber', () => {
+    it('should return true for integer strings', () => {
+      expect(isNumber('42')).toBe(true);
+    });
+
+    it('should return true for floating point strings', () => {
+      expect(isNumber('3.14')).toBe(true);
+    });
+
+    it('should return true for numeric values', () => {
+      expect(isNumber(42)).toBe(true);
+    });
+
+    it('should return false for non-numeric strings', () => {
+      expect(isNumber('abc')).toBe(false);
+    });
+
+    it('should return false for empty string', () => {
+      expect(isNumber('')).toBe(false);
+    });
+
+    it('should return false for Infinity', () => {
+      expect(isNumber(Infinity)).toBe(false);
+    });
+
+    it('should return false for NaN', () => {
+      expect(isNumber(NaN)).toBe(false);
+    });
+
+    it('should return true for zero', () => {
+      expect(isNumber(0)).toBe(true);
+    });
+
+    it('should return false for null', () => {
+      expect(isNumber(null)).toBe(false);
+    });
+  });
+
+  describe('isQuestionConditionMet - additional operators', () => {
+    it('should return true for lt-equal condition when value is less than', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'lt-equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('5', question as Question, conditionalQuestion as Question)).toBe(true);
+    });
+
+    it('should return true for lt-equal condition when value is equal', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'lt-equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('10', question as Question, conditionalQuestion as Question)).toBe(true);
+    });
+
+    it('should return false for lt-equal condition when value is greater', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'lt-equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('15', question as Question, conditionalQuestion as Question)).toBe(false);
+    });
+
+    it('should return true for gt-equal condition when value is greater', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'gt-equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('15', question as Question, conditionalQuestion as Question)).toBe(true);
+    });
+
+    it('should return true for gt-equal condition when value is equal', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'gt-equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('10', question as Question, conditionalQuestion as Question)).toBe(true);
+    });
+
+    it('should return false for gt-equal condition when value is less', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'gt-equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('5', question as Question, conditionalQuestion as Question)).toBe(false);
+    });
+
+    it('should return false when no matching condition is found', () => {
+      const question: Partial<Question> = { id: 99 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: [{
+          conditional_on: 1,
+          condition_value: '10',
+          question_condition_typ: { question_condition_typ: 'equal' } as QuestionConditionType
+        }]
+      };
+
+      expect(isQuestionConditionMet('10', question as Question, conditionalQuestion as Question)).toBe(false);
+    });
+
+    it('should return false for empty conditional_on_questions', () => {
+      const question: Partial<Question> = { id: 1 };
+      const conditionalQuestion: Partial<Question> = {
+        conditional_on_questions: []
+      };
+
+      expect(isQuestionConditionMet('10', question as Question, conditionalQuestion as Question)).toBe(false);
+    });
+  });
+
+  describe('getPropertyValue - array notation', () => {
+    it('should get array element by numeric index', () => {
+      const obj = { items: ['a', 'b', 'c'] };
+      expect(getPropertyValue(obj, 'items[1]')).toBe('b');
+    });
+
+    it('should get property of array element', () => {
+      const obj = { items: [{ name: 'Alice' }, { name: 'Bob' }] };
+      expect(getPropertyValue(obj, 'items[0].name')).toBe('Alice');
+    });
+
+    it('should get array element by string key in brackets', () => {
+      const obj = { data: { key: 'value' } };
+      expect(getPropertyValue(obj, 'data["key"]')).toBe('value');
+    });
+
+    it('should return empty string when array index out of bounds', () => {
+      const obj = { items: ['a', 'b'] };
+      expect(getPropertyValue(obj, 'items[5]')).toBe('');
+    });
+  });
+
+  describe('getScreenSize - all size branches', () => {
+    it('should return SM for window width of 767', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize.SM);
+      expect(getScreenSize()).toBe(AppSize.SM);
+    });
+
+    it('should return XLG for window width of 922', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize.XLG);
+      expect(getScreenSize()).toBe(AppSize.XLG);
+    });
+
+    it('should return _2XLG for window width of 1200', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize._2XLG);
+      expect(getScreenSize()).toBe(AppSize._2XLG);
+    });
+
+    it('should return _3XLG for window width of 1400', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize._3XLG);
+      expect(getScreenSize()).toBe(AppSize._3XLG);
+    });
+
+    it('should return _4XLG for window width of 2000', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize._4XLG);
+      expect(getScreenSize()).toBe(AppSize._4XLG);
+    });
+
+    it('should return _5XLG for window width of 2350', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize._5XLG);
+      expect(getScreenSize()).toBe(AppSize._5XLG);
+    });
+
+    it('should return _6XLG for window width of 2650', () => {
+      spyOnProperty(window, 'innerWidth').and.returnValue(AppSize._6XLG);
+      expect(getScreenSize()).toBe(AppSize._6XLG);
+    });
+  });
+
+  describe('openFullscreen', () => {
+    it('should call requestFullscreen when available', () => {
+      const imgEl = document.createElement('img');
+      document.body.appendChild(imgEl);
+
+      let fullscreenCalled = false;
+      imgEl.requestFullscreen = () => {
+        fullscreenCalled = true;
+        return Promise.resolve();
+      };
+
+      const event = { target: imgEl } as unknown as MouseEvent;
+      openFullscreen(event);
+
+      expect(fullscreenCalled).toBe(true);
+
+      document.body.removeChild(imgEl);
+    });
+
+    it('should not throw when requestFullscreen is not available', () => {
+      const imgEl = document.createElement('img');
+      document.body.appendChild(imgEl);
+
+      // Override requestFullscreen to be undefined so source code won't call it
+      Object.defineProperty(imgEl, 'requestFullscreen', {
+        value: undefined,
+        configurable: true
+      });
+
+      const event = { target: imgEl } as unknown as MouseEvent;
+      expect(() => openFullscreen(event)).not.toThrow();
+
+      document.body.removeChild(imgEl);
+    });
+
+    it('should not throw when target is null', () => {
+      const event = { target: null } as unknown as MouseEvent;
+      expect(() => openFullscreen(event)).not.toThrow();
+    });
+  });
+
+  describe('tableToCSV - date value conversion', () => {
+    it('should format date values in table data', () => {
+      const tableCols = [{ ColLabel: 'Date', PropertyName: 'date' }];
+      const tableData = [{ date: '2023-06-15T14:30:00Z' }];
+
+      const csv = tableToCSV(tableCols, tableData);
+
+      expect(csv).toContain('"Date"');
+      // The date should be formatted as a date string (not the ISO string)
+      expect(csv).not.toContain('2023-06-15T14:30:00Z');
+    });
+
+    it('should return empty string and not call onEmptyError when no callback and empty', () => {
+      const csv = tableToCSV([], []);
+      expect(csv).toBe('');
+    });
+  });
+
+  describe('resizeImageToMaxSize', () => {
+    it('should be a function', () => {
+      expect(typeof resizeImageToMaxSize).toBe('function');
+    });
+  });
+
+  describe('previewImage', () => {
+    it('should be a function', () => {
+      expect(typeof previewImage).toBe('function');
     });
   });
 });

@@ -230,6 +230,17 @@ describe('GeneralService', () => {
       const banners = service.getBanners();
       expect(banners.length).toBe(1);
     });
+
+    it('should handle banner with null timeout during removal', () => {
+      const banner = new Banner('Test', 3000);
+      (banner as any).timeout = null;
+      service.addBanner(banner);
+
+      expect(() => service.removeBanner(banner)).not.toThrow();
+
+      const banners = service.getBanners();
+      expect(banners.length).toBe(0);
+    });
   });
 
   describe('Site Banners', () => {
@@ -346,10 +357,18 @@ describe('GeneralService', () => {
       expect(typeof size).toBe('number');
     });
 
-    it('should cap size at SM for mobile', () => {
+    it('should cap size at SM for mobile when screen is larger than SM', () => {
       mockDeviceService.isMobile.and.returnValue(true);
+      spyOnProperty(window, 'innerWidth').and.returnValue(1024);
       const size = service.getAppSize();
-      expect(size).toBeLessThanOrEqual(AppSize.SM);
+      expect(size).toBe(AppSize.SM);
+    });
+
+    it('should return actual size for mobile when screen is already SM or smaller', () => {
+      mockDeviceService.isMobile.and.returnValue(true);
+      spyOnProperty(window, 'innerWidth').and.returnValue(400);
+      const size = service.getAppSize();
+      expect(size).toBe(AppSize.XS);
     });
   });
 
@@ -383,14 +402,27 @@ describe('GeneralService', () => {
       service.previewImageFile(mockFile, () => { });
     });
 
-    it('should not process non-image files', () => {
+    it('should not process non-image files but still increment outstanding calls', () => {
       const mockFile = new File([''], 'test.txt', { type: 'text/plain' });
-      spyOn(service, 'incrementOutstandingCalls');
+      let lastCount = 0;
+      service.currentOutstandingCalls.subscribe(count => {
+        lastCount = count;
+      });
 
       service.previewImageFile(mockFile, () => { });
 
-      // Should still increment for non-image
-      expect(service.incrementOutstandingCalls).toHaveBeenCalled();
+      // Should increment but return early without calling FileReader
+      expect(lastCount).toBe(1);
+    });
+
+    it('should call onLoad callback when image file is loaded', (done) => {
+      const content = 'data:image/jpeg;base64,abc';
+      const mockFile = new File([content], 'test.jpg', { type: 'image/jpeg' });
+
+      service.previewImageFile(mockFile, (ev) => {
+        expect(ev).toBeDefined();
+        done();
+      });
     });
   });
 
