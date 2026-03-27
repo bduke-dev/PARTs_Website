@@ -402,7 +402,7 @@ describe('GeneralService', () => {
       service.previewImageFile(mockFile, () => { });
     });
 
-    it('should not process non-image files but still increment outstanding calls', () => {
+    it('should increment outstanding calls for non-image files', () => {
       const mockFile = new File([''], 'test.txt', { type: 'text/plain' });
       let lastCount = 0;
       service.currentOutstandingCalls.subscribe(count => {
