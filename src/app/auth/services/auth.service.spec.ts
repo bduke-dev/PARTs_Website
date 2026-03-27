@@ -633,4 +633,78 @@ describe('AuthService', () => {
       });
     });
   });
+
+  describe('isAdmin', () => {
+    it('should return true when user has admin permission', () => {
+      const adminUser = Object.assign(new User(), {
+        ...mockUser,
+        permissions: [{ codename: 'admin' }]
+      });
+      service['userBS'].next(adminUser);
+
+      expect(service.isAdmin()).toBe(true);
+    });
+
+    it('should return false when user does not have admin permission', () => {
+      const regularUser = Object.assign(new User(), {
+        ...mockUser,
+        permissions: [{ codename: 'user' }]
+      });
+      service['userBS'].next(regularUser);
+
+      expect(service.isAdmin()).toBe(false);
+    });
+
+    it('should return false when user has no permissions', () => {
+      const noPermUser = Object.assign(new User(), {
+        ...mockUser,
+        permissions: []
+      });
+      service['userBS'].next(noPermUser);
+
+      expect(service.isAdmin()).toBe(false);
+    });
+  });
+
+  describe('simulateUser', () => {
+    it('should call API to simulate user', () => {
+      const testUser = Object.assign(new User(), { id: 456, username: 'other' });
+
+      mockAPIService.get.and.callFake((showLoading: boolean, endpoint: string, params: any, onNext: any) => {
+        // Don't call onNext to keep it simple
+        return Promise.resolve() as any;
+      });
+
+      service.simulateUser(testUser);
+
+      expect(mockAPIService.get).toHaveBeenCalledWith(
+        true,
+        'user/simulate/',
+        { user_id: 456 },
+        jasmine.any(Function)
+      );
+    });
+
+    it('should navigate to root and set token on success', (done) => {
+      const testUser = Object.assign(new User(), { id: 456 });
+      service.setToken(mockToken);
+
+      mockAPIService.get.and.callFake((showLoading: boolean, endpoint: string, params: any, onNext: any) => {
+        onNext(mockToken);
+        return Promise.resolve() as any;
+      });
+
+      mockDataService.get.and.callFake((showLoading: boolean, endpoint: string, params: any, store: any, query: any, onNext: any) => {
+        onNext(mockUser);
+        return Promise.resolve() as any;
+      });
+
+      service.simulateUser(testUser);
+
+      setTimeout(() => {
+        expect(mockRouter.navigateByUrl).toHaveBeenCalledWith('');
+        done();
+      }, 50);
+    });
+  });
 });

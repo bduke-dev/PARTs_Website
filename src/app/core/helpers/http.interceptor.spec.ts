@@ -541,4 +541,39 @@ describe('httpInterceptor', () => {
       });
     });
   });
+
+  it('should not logout on 400 error when user is not logged in', (done) => {
+    mockAuthService.getUser.and.returnValue(null as any);
+
+    const error = new HttpErrorResponse({ status: 400 });
+    mockNext.and.returnValue(throwError(() => error));
+
+    const req = new HttpRequest('GET', 'test/endpoint');
+
+    TestBed.runInInjectionContext(() => {
+      httpInterceptor(req, mockNext).subscribe({
+        error: (err) => {
+          expect(err.status).toBe(400);
+          expect(mockAuthService.logOut).not.toHaveBeenCalled();
+          done();
+        }
+      });
+    });
+  });
+
+  it('should not add authorization header when token is empty string', (done) => {
+    mockAuthService.getUser.and.returnValue({ id: 1, username: 'test' } as any);
+    mockAuthService.getAccessToken.and.returnValue('');
+    mockAuthService.isTokenExpired.and.returnValue(false);
+
+    const req = new HttpRequest('GET', 'test/endpoint');
+
+    TestBed.runInInjectionContext(() => {
+      httpInterceptor(req, mockNext).subscribe(() => {
+        const clonedRequest = mockNext.calls.mostRecent().args[0] as HttpRequest<unknown>;
+        expect(clonedRequest.headers.has('Authorization')).toBe(false);
+        done();
+      });
+    });
+  });
 });

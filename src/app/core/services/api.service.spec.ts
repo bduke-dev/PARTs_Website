@@ -176,6 +176,24 @@ describe('APIService', () => {
 
       expect(promise1).not.toBe(promise2);
     });
+
+    it('should return empty string when response is null', async () => {
+      const promise = service.getAPIStatus();
+      const req = httpMock.expectOne('public/api-status/');
+      req.flush(null);
+
+      const result = await promise;
+      expect(result).toBe('');
+    });
+
+    it('should return empty string when response is a string', async () => {
+      const promise = service.getAPIStatus();
+      const req = httpMock.expectOne('public/api-status/');
+      req.flush('ok');
+
+      const result = await promise;
+      expect(result).toBe('');
+    });
   });
 
   describe('GET requests', () => {

@@ -349,4 +349,45 @@ describe('ModalService', () => {
       expect(service.getModalVisibleCount()).toBe(2);
     });
   });
+
+  describe('triggerError - edge cases', () => {
+    it('should handle object without message or retMessage property', () => {
+      service.triggerError({ unrelatedProp: 'value' });
+      expect(service.showErrorModal).toBe(true);
+      expect(service.errorMessage).toEqual({ unrelatedProp: 'value' } as any);
+    });
+
+    it('should handle object with empty message property (falls to retMessage check)', () => {
+      service.triggerError({ message: '', retMessage: 'Return message' });
+      expect(service.errorMessage).toBe('Return message');
+    });
+
+    it('should handle object with empty retMessage property (falls to else)', () => {
+      service.triggerError({ retMessage: '' });
+      expect(service.showErrorModal).toBe(true);
+      expect(service.errorMessage).toEqual({ retMessage: '' } as any);
+    });
+
+    it('should handle null message', () => {
+      service.triggerError(null);
+      expect(service.showErrorModal).toBe(true);
+    });
+  });
+
+  describe('triggerFormValidationBanner - message format', () => {
+    it('should format each field with bullet point', () => {
+      const invalidFields = ['Email', 'Password'];
+      service.triggerFormValidationBanner(invalidFields);
+      const bannerCall = mockGeneralService.addBanner.calls.mostRecent().args[0] as any;
+      expect(bannerCall.message).toContain('&bull;  Email is invalid');
+      expect(bannerCall.message).toContain('&bull;  Password is invalid');
+    });
+
+    it('should handle empty fields array and still call addBanner', () => {
+      service.triggerFormValidationBanner([]);
+      expect(mockGeneralService.addBanner).toHaveBeenCalled();
+      const bannerCall = mockGeneralService.addBanner.calls.mostRecent().args[0] as any;
+      expect(bannerCall.message).toBe('');
+    });
+  });
 });
