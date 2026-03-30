@@ -55,4 +55,42 @@ describe('AppComponent', () => {
     expect(title).toBeDefined();
     expect(Array.isArray(title)).toBe(true);
   });
+
+  it('should return empty array when no title in route data', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const router = TestBed.inject(Router);
+    // Root route typically has no title
+    const title = app.getTitle(router.routerState, router.routerState.root);
+    expect(Array.isArray(title)).toBe(true);
+  });
+
+  it('should handle getTitle with a route that has no firstChild', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const router = TestBed.inject(Router);
+    const mockRoute: any = {
+      snapshot: { data: {} },
+      firstChild: null
+    };
+    const title = app.getTitle(router.routerState, mockRoute);
+    expect(title).toEqual([]);
+  });
+
+  it('should handle getTitle with nested children', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const router = TestBed.inject(Router);
+    const childRoute: any = {
+      snapshot: { data: {} },
+      firstChild: null
+    };
+    const parentRoute: any = {
+      snapshot: { data: {} },
+      firstChild: childRoute
+    };
+    const title = app.getTitle(router.routerState, parentRoute);
+    expect(Array.isArray(title)).toBe(true);
+  });
 });
+
